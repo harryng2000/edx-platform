@@ -102,7 +102,7 @@ def standard_cookie_settings(request):
         'expires': expires,
         'domain': settings.SESSION_COOKIE_DOMAIN,
         'path': '/',
-        'httponly': None,
+        'httponly': True,
     }
 
     # In production, TLS should be enabled so that this cookie is encrypted
