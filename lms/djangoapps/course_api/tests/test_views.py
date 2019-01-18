@@ -18,10 +18,6 @@ from waffle.testutils import override_switch
 
 from ..views import CourseDetailView, CourseListUserThrottle
 from .mixins import TEST_PASSWORD, CourseApiFactoryMixin
-from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase, ModuleStoreTestCase
-from .mixins import CourseApiFactoryMixin, TEST_PASSWORD
-from ..views import CourseDetailView
-from openedx.core.djangoapps.site_configuration.tests.test_util import with_site_configuration
 
 TEST_SITE_CONFIGURATION = {
     'RESTRICT_COURSES_API': True
