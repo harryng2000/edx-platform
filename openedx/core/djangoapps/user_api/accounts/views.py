@@ -17,8 +17,10 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils.translation import ugettext as _
 from edx_ace import ace
+from rest_condition import C
 from edx_ace.recipient import Recipient
 from edx_rest_framework_extensions.authentication import JwtAuthentication
+from edx_rest_framework_extensions.permissions import JwtHasScope,IsAuthenticated, JwtRestrictedApplication, IsUserInUrl, IsStaff, NotJwtRestrictedApplication
 from enterprise.models import EnterpriseCourseEnrollment, EnterpriseCustomerUser, PendingEnterpriseCustomerUser
 from integrated_channels.degreed.models import DegreedLearnerDataTransmissionAudit
 from integrated_channels.sap_success_factors.models import SapSuccessFactorsLearnerDataTransmissionAudit
@@ -84,6 +86,13 @@ from ..message_types import DeletionNotificationMessage
 from third_party_auth.models import UserSocialAuthMapping
 
 log = logging.getLogger(__name__)
+
+JWT_RESTRICTED_PERMISSIONS = (
+    C(JwtRestrictedApplication) &
+    JwtHasScope
+)
+NOT_JWT_RESTRICTED_PERMISSIONS = C(NotJwtRestrictedApplication) & (C(IsStaff) | IsUserInUrl)
+JWT_RESTRICTED_APPLICATION_OR_USER_ACCESS = C(IsAuthenticated) & (NOT_JWT_RESTRICTED_PERMISSIONS | JWT_RESTRICTED_PERMISSIONS)
 
 USER_PROFILE_PII = {
     'name': '',
@@ -417,7 +426,9 @@ class DeactivateLogoutViewV2(APIView):
     - Create a row in the retirement table for that user
     """
     authentication_classes = (SessionAuthentication, JwtAuthentication, )
-    permission_classes = (permissions.IsAuthenticated, )
+    # permission_classes = (permissions.IsAuthenticated, )
+    permission_classes = (JWT_RESTRICTED_APPLICATION_OR_USER_ACCESS,)
+    required_scopes = ['gdpr:write'] 
 
     def post(self, request):
         """
