@@ -33,7 +33,7 @@ botocore==1.8.17                    # via boto3, s3transfer
 celery==3.1.25                      # Asynchronous task execution library
 ddt==0.8.0                          # via xblock-drag-and-drop-v2 (which probably shouldn't require it)
 defusedxml==0.4.1                   # XML bomb protection for common XML parsers
-Django==1.11.15                     # Web application framework
+Django==1.11.18                     # Web application framework
 django-babel-underscore             # underscore template extractor for django-babel (internationalization utilities)
 django-config-models==0.1.8         # Configuration models for Django allowing config management with auditing
 django-cors-headers==2.1.0          # Used to allow to configure CORS headers for cross-domain requests
@@ -58,7 +58,9 @@ django-ses==0.8.4
 django-simple-history
 django-splash
 django-statici18n==1.4.0
-django-storages==1.4.1
+#django-storages==1.7.1
+# Interim fix for azure storage integration with django-storages
+git+https://github.com/eltoncarr/django-storages.git@eltonc/support_kwargs_azure_storage#egg=django-storages
 django-user-tasks
 django-waffle==0.12.0
 django-webpack-loader               # Used to wire webpack bundles into the django asset pipeline

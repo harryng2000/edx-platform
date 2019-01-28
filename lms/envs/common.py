@@ -240,6 +240,11 @@ FEATURES = {
     # migrations if you enable this; we don't create tables by default.
     'ENABLE_THIRD_PARTY_AUTH': False,
 
+    # By default edX support custom username/password for authentication.  In some use cases, the use of custom auth
+    # is not needed. This option provides a master option for continuing to use custom authentication (default) or
+    # disable custom authentication in favor of third party authentication.
+    'ENABLE_CUSTOM_AUTH': True,
+
     # Toggle to enable alternate urls for marketing links
     'ENABLE_MKTG_SITE': False,
 
@@ -398,6 +403,13 @@ FEATURES = {
 
     # Whether to display the account deletion section the account settings page
     'ENABLE_ACCOUNT_DELETION': True,
+
+    # Set this to true to make Delete requests from third party agent
+    'ENABLE_OAUTH_ACCOUNT_DELETION': True,
+  
+    # Making the display of course discovery and dashboard tabs configurable
+    'ENABLE_COURSE_DISCOVERY': True,
+    'ENABLE_DASHBOARD_TABS': True,
 }
 
 # Settings for the course reviews tool template and identification key, set either to None to disable course reviews
@@ -513,6 +525,7 @@ OAUTH2_PROVIDER = {
     'SCOPES': dict(OAUTH2_DEFAULT_SCOPES, **{
         'grades:read': _('Retrieve your grades for your enrolled courses'),
         'certificates:read': _('Retrieve your course certificates'),
+        'retire_user:write': _('Retire the user account'),
     }),
     'DEFAULT_SCOPES': OAUTH2_DEFAULT_SCOPES,
     'REQUEST_APPROVAL_PROMPT': 'auto_even_if_expired',
@@ -1301,6 +1314,7 @@ MIDDLEWARE_CLASSES = [
     'openedx.features.enterprise_support.middleware.EnterpriseMiddleware',
 
     'edx_rest_framework_extensions.middleware.EnsureJWTAuthSettingsMiddleware',
+    'openedx.core.djangoapps.site_configuration.middleware.LoginRequiredMiddleware',
 
     # This must be last
     'openedx.core.djangoapps.site_configuration.middleware.SessionCookieDomainOverrideMiddleware',
@@ -3478,3 +3492,12 @@ USER_STATE_BATCH_SIZE = 5000
 from openedx.core.djangoapps.plugins import plugin_apps, plugin_settings, constants as plugin_constants
 INSTALLED_APPS.extend(plugin_apps.get_apps(plugin_constants.ProjectType.LMS))
 plugin_settings.add_plugins(__name__, plugin_constants.ProjectType.LMS, plugin_constants.SettingsType.COMMON)
+
+# Social Django defaults to HTTP scheme when generating redirect_uri
+# It is therefore necessary to add this setting in order to support
+# changing the redirect_uri to HTTPS. Defaulting to False (default behavior)
+# and expecting client to override.
+REDIRECT_IS_HTTPS = False
+
+# this will enable certificate generation for honor mode enrollments
+ENABLE_CERTIFICATES_FOR_HONOR_MODE = False

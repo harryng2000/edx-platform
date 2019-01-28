@@ -22,6 +22,8 @@ import os
 from path import Path as path
 from xmodule.modulestore.modulestore_settings import convert_module_store_setting_if_needed
 
+from lms.envs.azure_msi_key_vault import override_configs_from_keyvault
+
 # SERVICE_VARIANT specifies name of the variant used, which decides what JSON
 # configuration files are read during startup.
 SERVICE_VARIANT = os.environ.get('SERVICE_VARIANT', None)
@@ -94,6 +96,17 @@ CELERY_ROUTES = "{}celery.Router".format(QUEUE_VARIANT)
 with open(CONFIG_ROOT / CONFIG_PREFIX + "env.json") as env_file:
     ENV_TOKENS = json.load(env_file)
 
+##################### NON-SECURE ENV CONFIG FROM  AZURE KEY VAULT ########
+# Override non-secure env config from azure keyvault
+if ENV_TOKENS.get('GET_SECRETS_FROM_AZURE_KEYVAULT', False):
+    request_uri = ENV_TOKENS.get('AZURE_MSI_REQUEST_URI', None)
+    payload = ENV_TOKENS.get('KEYVAULT_PAYLOAD', None)
+    key_vault_url = ENV_TOKENS.get('KEYVAULT_URL', None)
+    non_secure_key = ENV_TOKENS.get('CMS_NON_SECURE_KEY_NAME', None)
+    keyvault_api_version = ENV_TOKENS.get('KEYVAULT_API_VERSION', None)
+    ENV_TOKENS = override_configs_from_keyvault(ENV_TOKENS, request_uri, payload, key_vault_url, non_secure_key, keyvault_api_version)
+
+
 # Do NOT calculate this dynamically at startup with git because it's *slow*.
 EDX_PLATFORM_REVISION = ENV_TOKENS.get('EDX_PLATFORM_REVISION', EDX_PLATFORM_REVISION)
 
@@ -152,11 +165,7 @@ ENTERPRISE_CONSENT_API_URL = ENV_TOKENS.get('ENTERPRISE_CONSENT_API_URL', LMS_IN
 
 SITE_NAME = ENV_TOKENS['SITE_NAME']
 
-ALLOWED_HOSTS = [
-    # TODO: bbeggs remove this before prod, temp fix to get load testing running
-    "*",
-    ENV_TOKENS.get('CMS_BASE')
-]
+ALLOWED_HOSTS = ENV_TOKENS.get('CMS_ALLOWED_HOSTS')
 
 LOG_DIR = ENV_TOKENS['LOG_DIR']
 DATA_DIR = path(ENV_TOKENS.get('DATA_DIR', DATA_DIR))
@@ -307,6 +316,13 @@ ZENDESK_CUSTOM_FIELDS = ENV_TOKENS.get('ZENDESK_CUSTOM_FIELDS', ZENDESK_CUSTOM_F
 # Secret things: passwords, access keys, etc.
 with open(CONFIG_ROOT / CONFIG_PREFIX + "auth.json") as auth_file:
     AUTH_TOKENS = json.load(auth_file)
+
+##################### SECURE AUTH FROM AZURE KEY VAULT ########
+# Override secure auth items from azure keyvault
+if ENV_TOKENS.get('GET_SECRETS_FROM_AZURE_KEYVAULT', False):
+    secure_keys = ENV_TOKENS.get('CMS_SECURE_KEY_NAME', None)
+    AUTH_TOKENS = override_configs_from_keyvault(AUTH_TOKENS, request_uri, payload, key_vault_url, secure_keys, keyvault_api_version)
+
 
 ############### XBlock filesystem field config ##########
 if 'DJFS' in AUTH_TOKENS and AUTH_TOKENS['DJFS'] is not None:
@@ -465,6 +481,22 @@ SESSION_INACTIVITY_TIMEOUT_IN_SECONDS = AUTH_TOKENS.get("SESSION_INACTIVITY_TIME
 ##### X-Frame-Options response header settings #####
 X_FRAME_OPTIONS = ENV_TOKENS.get('X_FRAME_OPTIONS', X_FRAME_OPTIONS)
 
+##### Third-party auth options ################################################
+if FEATURES.get('ENABLE_THIRD_PARTY_AUTH'):
+    tmp_backends = ENV_TOKENS.get('THIRD_PARTY_AUTH_BACKENDS', [
+        'social_core.backends.google.GoogleOAuth2',
+        'social_core.backends.linkedin.LinkedinOAuth2',
+        'social_core.backends.facebook.FacebookOAuth2',
+        'social_core.backends.azuread.AzureADOAuth2',
+    ])
+
+    AUTHENTICATION_BACKENDS = list(tmp_backends) + list(AUTHENTICATION_BACKENDS)
+    del tmp_backends
+
+    # The reduced session expiry time during the third party login pipeline. (Value in seconds)
+    SOCIAL_AUTH_PIPELINE_TIMEOUT = ENV_TOKENS.get('SOCIAL_AUTH_PIPELINE_TIMEOUT', 600)
+    SOCIAL_AUTH_OAUTH_SECRETS = AUTH_TOKENS.get('SOCIAL_AUTH_OAUTH_SECRETS', {})
+
 ##### ADVANCED_SECURITY_CONFIG #####
 ADVANCED_SECURITY_CONFIG = ENV_TOKENS.get('ADVANCED_SECURITY_CONFIG', {})
 
@@ -587,6 +619,12 @@ RETIREMENT_SERVICE_WORKER_USERNAME = ENV_TOKENS.get(
 )
 RETIREMENT_STATES = ENV_TOKENS.get('RETIREMENT_STATES', RETIREMENT_STATES)
 
+# Social Django defaults to HTTP scheme when generating redirect_uri
+# It is therefore necessary to add this setting in order to support
+# changing the redirect_uri to HTTPS. Defaulting to False (default behavior)
+# and expecting client to override.
+REDIRECT_IS_HTTPS = ENV_TOKENS.get('REDIRECT_IS_HTTPS', REDIRECT_IS_HTTPS)
+
 ####################### Plugin Settings ##########################
 
 from openedx.core.djangoapps.plugins import plugin_settings, constants as plugin_constants
@@ -595,3 +633,5 @@ plugin_settings.add_plugins(__name__, plugin_constants.ProjectType.CMS, plugin_c
 ########################## Derive Any Derived Settings  #######################
 
 derive_settings(__name__)
+
+ENCRYPT_SESSION_KEY_USING_MD5 = ENV_TOKENS.get('ENCRYPT_SESSION_KEY_USING_MD5', True)

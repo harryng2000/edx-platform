@@ -30,6 +30,8 @@ import os
 from path import Path as path
 from xmodule.modulestore.modulestore_settings import convert_module_store_setting_if_needed
 
+from azure_msi_key_vault import override_configs_from_keyvault
+
 # SERVICE_VARIANT specifies name of the variant used, which decides what JSON
 # configuration files are read during startup.
 SERVICE_VARIANT = os.environ.get('SERVICE_VARIANT', None)
@@ -107,6 +109,17 @@ CELERYBEAT_SCHEDULE = {}  # For scheduling tasks, entries can be added to this d
 with open(CONFIG_ROOT / CONFIG_PREFIX + "env.json") as env_file:
     ENV_TOKENS = json.load(env_file)
 
+##################### NON-SECURE ENV CONFIG FROM  AZURE KEY VAULT ########
+# Override non-secure env config from azure keyvault
+if ENV_TOKENS.get('GET_SECRETS_FROM_AZURE_KEYVAULT', False):
+    request_uri = ENV_TOKENS.get('AZURE_MSI_REQUEST_URI', None)
+    payload = ENV_TOKENS.get('KEYVAULT_PAYLOAD', None)
+    key_vault_url = ENV_TOKENS.get('KEYVAULT_URL', None)
+    non_secure_key = ENV_TOKENS.get('LMS_NON_SECURE_KEY_NAME', None)
+    keyvault_api_version = ENV_TOKENS.get('KEYVAULT_API_VERSION', None)
+    ENV_TOKENS = override_configs_from_keyvault(ENV_TOKENS, request_uri, payload, key_vault_url, non_secure_key, keyvault_api_version)
+
+
 # STATIC_ROOT specifies the directory where static files are
 # collected
 STATIC_ROOT_BASE = ENV_TOKENS.get('STATIC_ROOT_BASE', None)
@@ -181,12 +194,7 @@ for feature, value in ENV_FEATURES.items():
 
 CMS_BASE = ENV_TOKENS.get('CMS_BASE', 'studio.edx.org')
 
-ALLOWED_HOSTS = [
-    # TODO: bbeggs remove this before prod, temp fix to get load testing running
-    "*",
-    ENV_TOKENS.get('LMS_BASE'),
-    FEATURES['PREVIEW_LMS_BASE'],
-]
+ALLOWED_HOSTS = ENV_TOKENS.get('LMS_ALLOWED_HOSTS')
 
 # allow for environments to specify what cookie name our login subsystem should use
 # this is to fix a bug regarding simultaneous logins between edx.org and edge.edx.org which can
@@ -470,6 +478,13 @@ FIELD_OVERRIDE_PROVIDERS = tuple(ENV_TOKENS.get('FIELD_OVERRIDE_PROVIDERS', []))
 with open(CONFIG_ROOT / CONFIG_PREFIX + "auth.json") as auth_file:
     AUTH_TOKENS = json.load(auth_file)
 
+##################### SECURE AUTH FROM AZURE KEY VAULT ########
+# Override secure auth items from azure keyvault
+if ENV_TOKENS.get('GET_SECRETS_FROM_AZURE_KEYVAULT', False):
+    secure_keys = ENV_TOKENS.get('LMS_SECURE_KEY_NAME', None)
+    AUTH_TOKENS = override_configs_from_keyvault(AUTH_TOKENS, request_uri, payload, key_vault_url, secure_keys, keyvault_api_version)
+
+
 ############### XBlock filesystem field config ##########
 if 'DJFS' in AUTH_TOKENS and AUTH_TOKENS['DJFS'] is not None:
     DJFS = AUTH_TOKENS['DJFS']
@@ -512,6 +527,13 @@ if AWS_SECRET_ACCESS_KEY == "":
 
 AWS_STORAGE_BUCKET_NAME = AUTH_TOKENS.get('AWS_STORAGE_BUCKET_NAME', 'edxuploads')
 
+#
+# To support Azure Storage via the Django-Storages library
+#
+AZURE_ACCOUNT_NAME = AUTH_TOKENS.get('AZURE_ACCOUNT_NAME', None)
+AZURE_ACCOUNT_KEY = AUTH_TOKENS.get('AZURE_ACCOUNT_KEY', None)
+AZURE_CONTAINER = AUTH_TOKENS.get('AZURE_CONTAINER', None)
+
 # Disabling querystring auth instructs Boto to exclude the querystring parameters (e.g. signature, access key) it
 # normally appends to every returned URL.
 AWS_QUERYSTRING_AUTH = AUTH_TOKENS.get('AWS_QUERYSTRING_AUTH', True)
@@ -521,6 +543,8 @@ if AUTH_TOKENS.get('DEFAULT_FILE_STORAGE'):
     DEFAULT_FILE_STORAGE = AUTH_TOKENS.get('DEFAULT_FILE_STORAGE')
 elif AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto.S3BotoStorage'
+elif AZURE_ACCOUNT_NAME and AZURE_ACCOUNT_KEY and AZURE_CONTAINER:
+    DEFAULT_FILE_STORAGE = 'openedx.core.storage.AzureStorageExtended'
 else:
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 
@@ -673,6 +697,7 @@ if FEATURES.get('ENABLE_THIRD_PARTY_AUTH'):
         'social_core.backends.linkedin.LinkedinOAuth2',
         'social_core.backends.facebook.FacebookOAuth2',
         'social_core.backends.azuread.AzureADOAuth2',
+        'social_core.backends.live.LiveOAuth2',
         'third_party_auth.saml.SAMLAuthBackend',
         'third_party_auth.lti.LTIAuthBackend',
     ])
@@ -1093,11 +1118,33 @@ RETIREMENT_SERVICE_WORKER_USERNAME = ENV_TOKENS.get(
 )
 RETIREMENT_STATES = ENV_TOKENS.get('RETIREMENT_STATES', RETIREMENT_STATES)
 
+# Making the display of course discovery and dashboard tabs configurable
+ENABLE_COURSE_DISCOVERY = FEATURES.get('ENABLE_COURSE_DISCOVERY')
+ENABLE_DASHBOARD_TABS = FEATURES.get('ENABLE_DASHBOARD_TABS')
+
+# Social Django defaults to HTTP scheme when generating redirect_uri
+# It is therefore necessary to add this setting in order to support
+# changing the redirect_uri to HTTPS. Defaulting to False (default behavior)
+# and expecting client to override.
+REDIRECT_IS_HTTPS = ENV_TOKENS.get('REDIRECT_IS_HTTPS')
+
+# By default edX support custom username/password for authentication.  In some use cases, the use of custom auth
+# is not needed. This option provides a master option for continuing to use custom authentication (default) or
+# disable custom authentication in favor of third party authentication.
+ENABLE_CUSTOM_AUTH = FEATURES.get('ENABLE_CUSTOM_AUTH', True)
+
 ############################### Plugin Settings ###############################
 
 from openedx.core.djangoapps.plugins import plugin_settings, constants as plugin_constants
 plugin_settings.add_plugins(__name__, plugin_constants.ProjectType.LMS, plugin_constants.SettingsType.AWS)
 
+######################### Enable honor mode eligible for certificate ##########
+ENABLE_CERTIFICATES_FOR_HONOR_MODE = ENV_TOKENS.get('ENABLE_CERTIFICATES_FOR_HONOR_MODE', ENABLE_CERTIFICATES_FOR_HONOR_MODE)
+
 ########################## Derive Any Derived Settings  #######################
 
 derive_settings(__name__)
+
+API_COOKIE_URL = ENV_TOKENS.get('API_COOKIE_URL', None)
+
+ENCRYPT_SESSION_KEY_USING_MD5 = ENV_TOKENS.get('ENCRYPT_SESSION_KEY_USING_MD5', True)

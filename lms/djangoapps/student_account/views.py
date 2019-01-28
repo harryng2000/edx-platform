@@ -2,6 +2,7 @@
 
 import json
 import logging
+import requests
 from datetime import datetime
 
 import urlparse
@@ -9,8 +10,8 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
-from django.urls import reverse
-from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.urls import reverse, resolve
+from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect
 from django.utils.translation import ugettext as _
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -170,6 +171,11 @@ def login_and_registration_form(request, initial_mode="login"):
 
     enterprise_customer = enterprise_customer_for_request(request)
     update_logistration_context_for_enterprise(request, context, enterprise_customer)
+    
+    # this view is used for auto-provisioning accounts logging in via third_party_auth. In the interim, it is still
+    # useful to have. So, we will only render this form if the auto-provisioning flow is not activated.
+    if not context['data']['third_party_auth']['syncLearnerProfileData']:
+        return redirect(configuration_helpers.get_value('REGISTRATION_REDIRECT_URL', '/'))
 
     response = render_to_response('student_account/login_and_register.html', context)
     handle_enterprise_cookies_for_logistration(request, response, context)
@@ -475,6 +481,23 @@ def account_settings(request):
         GET /account/settings
 
     """
+    
+    # When custom authentication is disabled, the settings page isn't
+    # the appropriate editor for user account settings. It should instead
+    # be managed by the third-party authentication provider. This setting here
+    # provides support for that override.
+    enable_student_account_settings_routes = configuration_helpers.get_value(
+        'ENABLE_STUDENT_ACCOUNT_SETTINGS_ROUTES',
+        True)
+
+    if not enable_student_account_settings_routes:
+        # student account settings have been disabled
+        # redirect to the dashboard (default) or a user specified path
+        return redirect(
+            configuration_helpers.get_value(
+                'STUDENT_ACCOUNT_SETTINGS_REDIRECT_URL',
+                '/dashboard'))
+
     context = account_settings_context(request)
     return render_to_response('student_account/account_settings.html', context)
 
@@ -557,6 +580,7 @@ def account_settings_context(request):
                 'options': TIME_ZONE_CHOICES,
             }
         },
+        'enable_msa': configuration_helpers.get_value('ENABLE_MSA', False),
         'platform_name': configuration_helpers.get_value('PLATFORM_NAME', settings.PLATFORM_NAME),
         'password_reset_support_link': configuration_helpers.get_value(
             'PASSWORD_RESET_SUPPORT_LINK', settings.PASSWORD_RESET_SUPPORT_LINK
@@ -604,3 +628,23 @@ def account_settings_context(request):
         } for state in auth_states if state.provider.display_for_login or state.has_account]
 
     return context
+
+
+def cookies_api(request):
+    """Getting the common API URL from the settings page
+       If the URL is not None or not empty then returning the response
+       Replacing the locale with the user locale value in the API URL
+    """
+    if settings.API_COOKIE_URL is not None or settings.API_COOKIE_URL != "":
+        try:
+            locale_var = request.LANGUAGE_CODE
+            end_point = settings.API_COOKIE_URL
+            parse_url = urlparse.urlparse(end_point)
+            i = parse_url.path.index('/', 1)
+            updated_path = '/' + locale_var + '/' + parse_url.path[1 + i:]
+            addr = urlparse.urlunparse((parse_url.scheme, parse_url.netloc, updated_path, parse_url.params, parse_url.query, parse_url.fragment))
+            response = requests.get(addr)
+            return JsonResponse(json.loads(response.content))
+
+        except:
+            log.info('Failed in calling cookies api {}'.format(settings.API_COOKIE_URL))

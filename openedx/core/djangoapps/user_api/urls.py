@@ -14,6 +14,7 @@ from .accounts.views import (
     AccountRetirementView,
     AccountViewSet,
     DeactivateLogoutView,
+    DeactivateLogoutViewV2,
     LMSAccountRetirementView
 )
 from .preferences.views import PreferencesDetailView, PreferencesView
@@ -53,6 +54,10 @@ RETIREMENT_RETRIEVE = AccountRetirementStatusView.as_view({
 
 RETIREMENT_UPDATE = AccountRetirementStatusView.as_view({
     'patch': 'partial_update',
+})
+
+RETIREMENT_CLEANUP = AccountRetirementStatusView.as_view({
+    'post': 'cleanup',
 })
 
 RETIREMENT_POST = AccountRetirementView.as_view({
@@ -100,6 +105,11 @@ urlpatterns = [
         name='deactivate_logout'
     ),
     url(
+        r'^v1/accounts/deactivate_logoutv2/$',
+        DeactivateLogoutViewV2.as_view(),
+        name='deactivate_logout_v2'
+    ),
+    url(
         r'^v1/accounts/{}/verification_status/$'.format(settings.USERNAME_PATTERN),
         IDVerificationStatusView.as_view(),
         name='verification_status'
@@ -118,6 +128,11 @@ urlpatterns = [
         r'^v1/accounts/retirement_queue/$',
         RETIREMENT_QUEUE,
         name='accounts_retirement_queue'
+    ),
+    url(
+        r'^v1/accounts/retirement_cleanup/$',
+        RETIREMENT_CLEANUP,
+        name='accounts_retirement_cleanup'
     ),
     url(
         r'^v1/accounts/retirements_by_status_and_date/$',

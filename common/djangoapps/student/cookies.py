@@ -35,7 +35,7 @@ def standard_cookie_settings(request):
         'expires': expires,
         'domain': settings.SESSION_COOKIE_DOMAIN,
         'path': '/',
-        'httponly': None,
+        'httponly': True,
     }
 
     return cookie_settings
@@ -86,7 +86,7 @@ def set_logged_in_cookies(request, response, user):
     response.set_cookie(
         settings.EDXMKTG_LOGGED_IN_COOKIE_NAME.encode('utf-8'),
         'true',
-        secure=None,
+        secure=True,
         **cookie_settings
     )
 
@@ -111,13 +111,12 @@ def set_user_info_cookie(response, request):
     # because the browser won't send it back to us.  This can cause an infinite redirect
     # loop in the third-party auth flow, which calls `is_logged_in_cookie_set` to determine
     # whether it needs to set the cookie or continue to the next pipeline stage.
-    user_info_cookie_is_secure = request.is_secure()
     user_info = get_user_info_cookie_data(request)
 
     response.set_cookie(
         settings.EDXMKTG_USER_INFO_COOKIE_NAME.encode('utf-8'),
         json.dumps(user_info),
-        secure=user_info_cookie_is_secure,
+        secure=True,
         **cookie_settings
     )
 
