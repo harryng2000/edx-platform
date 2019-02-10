@@ -2642,6 +2642,7 @@ PASSWORD_DICTIONARY = []
 
 # By default, don't use a file prefix
 ORA2_FILE_PREFIX = None
+ORA2_FILEUPLOAD_BACKEND = None
 ORA2_FILEUPLOAD  = None
 
 # Default File Upload Storage bucket and prefix. Used by the FileUpload Service.
