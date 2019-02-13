@@ -65,7 +65,6 @@ backports.functools-lru-cache==1.5
 beautifulsoup==3.2.1      # via pynliner
 billiard==3.3.0.23        # via celery
 beautifulsoup4-4.7.1
-beautifulsoup==3.2.1
 bleach==2.1.4
 boto3==1.4.8
 boto==2.39.0
